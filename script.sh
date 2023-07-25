@@ -54,8 +54,8 @@ if ! command -v "$compiler" >/dev/null 2>&1 ; then
     exit 1
 fi
 
-if ! [ -e "$test_directory" ] ; then
-    echo 1>&2 "Error: Directory $test_directory is not exist"
+if ! [ -e "$tests_directory" ] ; then
+    echo "Error: Directory $tests_directory does not exist"
     exit 1
 fi
 
@@ -67,9 +67,20 @@ fi
 arch="rv$arch_bits$extensions"
 assembly_directory="assemblies" # hardcoded so far
 mkdir -p $assembly_directory
-declare -a opt_lvls=("O0" "O1" "O2" "O3")
 
-for cur_instr_dir in "$test_directory"/* ; do
+platform=$(uname)
+
+optimization_flags=(
+    "-O0"
+    "-O1"
+    "-O2"
+    "-O3"
+)
+
+output_file="results.txt"
+echo "" > $output_file
+
+for cur_instr_dir in "$tests_directory"/* ; do
     
     instr_name=$(basename -- "$cur_instr_dir")
 
@@ -77,26 +88,49 @@ for cur_instr_dir in "$test_directory"/* ; do
         echo 1>&2 "Warning: $cur_instr_dir is not a directory. Ignored"
         continue
     fi
-    
-    echo "Instruction $instr_name:"
+
+    echo "Instruction $instr_name:" >> $output_file
 
     for test_file in "$cur_instr_dir"/*.c; do
         
         asm_dir=$assembly_directory/${test_file#*/} # change first directory 
         mkdir -p $assembly_directory/"$instr_name"
     
-        for i in {0..3} ; do
+        for flag in "${optimization_flags[@]}"; do
+            if [ "$platform" == "Linux" ]; then
+                $compiler -march="rv64gc_zba_zbb_zbc_zbs" -S -o "$asm_dir" "$flag" "$test_file-$flag"
+	    elif [ "$platform" == "Darwin" ]; then
+                $compiler -march="rv64gc_zba_zbb_zbc_zbs" -S -o "$asm_dir" "$flag" "$test_file-$flag"
+	    elif [[ "$platform" == *CYGWIN* || "$platform" == *MINGW* ]]; then
+                $compiler -march="rv64gc_zba_zbb_zbc_zbs" -S -o "$asm_dir" "$flag" "$test_file-$flag"
+            else
+                echo "Error: Unsupported platform"
+                exit 1
+            fi
 
             cur_asm=${asm_dir%.*}-${opt_lvls[i]}.s # change extension and optimization level to filename
-            
-            $compiler -march="$arch" -S -"${opt_lvls[i]}" -o "$cur_asm" "$test_file"
-
-        # if [ $? -eq 0 ]; then
-        #     echo "Test ${test_file%.*} compiled successfully"
-            
-        #     objdump -d ${test_file%.*} | grep -oP '(?<=<)[^>]+'
-        # fi
-
+            if [ $? -eq 0 ]; then
+                echo "Test ${test_file%.*} compiled successfully with optimization flag $flag" >> $output_file
+                if [ "$platform" == "Linux" ]; then
+                    objdump -d "$asm_dir" | grep -oP "(?<=<)[^>]+" | grep "$instr_name" | while read -r line; do
+        		if [ "$line" == "$instr_name" ] && ! nm -D "$asm_dir" | grep -q "\<$instr_name\>"; then
+            			echo "$line" >> $output_file
+        		fi
+    		done
+	    	elif [ "$platform" == "Darwin" ]; then
+    			otool -tv "$asm_dir" | grep -oP "(?<=<)[^>]+" | grep "$instr_name" | while read -r line; do
+        		if [ "$line" == "$instr_name" ] && ! nm -gU "$asm_dir" | grep -q "\<$instr_name\>"; then
+            			echo "$line" >> $output_file
+        		fi
+    		done    
+		elif [[ "$platform" == *CYGWIN* || "$platform" == *MINGW* ]]; then
+    			objdump -d "$asm_dir" | grep -oP "(?<=<)[^>]+" | grep "$instr_name" | while read -r line; do
+        		if [ "$line" == "$instr_name" ]; then
+            			echo "$line" >> $output_file
+        		fi
+    	    	done
+		fi
+            fi
         done
     done
 done
