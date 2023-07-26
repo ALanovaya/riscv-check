@@ -139,39 +139,11 @@ for cur_instr_dir in "$test_directory"/* ; do
 
             cur_asm=${asm_dir%.*}$flag.s # change extension and optimization level to filename
 
-            if [ "$platform" == "Linux" ]; then
-                $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file"
-	        elif [ "$platform" == "Darwin" ]; then
-                $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file"
-	        elif [[ "$platform" == *CYGWIN* || "$platform" == *MINGW* ]]; then
-                $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file"
-            else
-                echo 1>&2 "Error: Unsupported platform"
-                exit 1
-            fi
-            
+            $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file"
+	                
             if [ $? -eq 0 ]; then
-                echo "Test $test_file compiled successfully with optimization flag $flag" >> $output_file
-                
-                if [ "$platform" == "Linux" ]; then
-                    grep -oP "(?<=<)[^>]+" "$cur_asm" | grep "$instr_name" | while read -r line; do
-        		        if [ "$line" == "$instr_name" ] && ! nm -D "$cur_asm" | grep -q "\<$instr_name\>"; then
-            			    echo "$line" >> $output_file
-        		        fi
-    		        done
-	    	    elif [ "$platform" == "Darwin" ]; then
-    			    grep -oP "(?<=<)[^>]+" | grep "$instr_name" | while read -r line; do
-        		        if [ "$line" == "$instr_name" ] && ! nm -gU "$cur_asm" | grep -q "\<$instr_name\>"; then
-            			echo "$line" >> $output_file
-        		        fi
-    		        done    
-		        elif [[ "$platform" == *CYGWIN* || "$platform" == *MINGW* ]]; then
-    			    objdump -d "$asm_dir" | grep -oP "(?<=<)[^>]+" | grep "$instr_name" | while read -r line; do
-        		        if [ "$line" == "$instr_name" ]; then
-            			    echo "$line" >> $output_file
-        		        fi
-    	    	    done
-		        fi
+                echo "Test $test_file compiled successfully with optimization flag $flag" >> $output_file                
+                grep -oP "(?<=<)[^>]+" "$cur_asm" | grep "$instr_name" >> $output_file
             fi
         done
     done
