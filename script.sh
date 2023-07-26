@@ -143,7 +143,7 @@ for cur_instr_dir in "$test_directory"/* ; do
 	                
             if [ $? -eq 0 ]; then
                 echo "Test $test_file compiled successfully with optimization flag $flag" >> $output_file                
-                grep -oP "(?<=<)[^>]+" "$cur_asm" | grep "$instr_name" >> $output_file
+                grep -o "$instr_name" $cur_asm >> $output_file
             fi
         done
     done
