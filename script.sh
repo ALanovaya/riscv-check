@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
 
 usage () { 
-    echo -e "Usage: $0 [-c|--compiler <compiler>] [-t|--test-directory <test_directory>]\n[-b|--arch-bits <arch_bits> OPTIONAL. Set to 64 by default, can be 64 or 32]" ;
-    exit 1;
+    echo "Usage: $0 [-c|--compiler <compiler>] [-t|--test-directory <test_directory>]"
+}
+
+help () {
+    echo "Description: TODO"
+    echo
+    usage
+    echo
+    echo "Optional:"
+    echo "[-b|--arch-bits <arch_bits>] Set to 64 by default, can be 64 or 32"
+    echo "[-o|--output <directory>] The directory where all compiled files will be located. Set to \"compiled\" by default"
+    echo "[-s|--save] Enables saving a directory with compiled files. It is not saved by default"
 }
 
 arch_bits=64 # by default
+assembly_directory="compiled" # by default
+delete_assembly_dir=true # by default
 extensions="gc_zba_zbb_zbc_zbs"
 
 while [ $# -gt 0 ] ; do
@@ -25,16 +37,28 @@ while [ $# -gt 0 ] ; do
             shift
             shift
             ;;
+        -o|--output)
+            assembly_directory=$2
+            shift
+            shift
+            ;;
+        -s|--save)
+            delete_assembly_dir=false
+            shift
+            ;;
         -h|--help)
-            usage
+            help
+            exit 1
             ;;
         -*)
             echo 1>&2 "Error: unknown option <$1>"
             usage
+            exit 1
             ;;
         *)
-            echo 1>&2 "Error. unknown parameter <$1>"
+            echo 1>&2 "Error: unknown parameter <$1>"
             usage
+            exit 1
             ;;
     esac
 done
@@ -42,9 +66,10 @@ done
 if [ -z ${compiler+x} ] || [ -z ${test_directory+x} ] ; then
     echo 1>&2 "Error: the necessary parameters are not set"
     usage
+    exit 1
 fi
 
-if [ $arch_bits -ne 32 ] && [ $arch_bits -ne 64 ] ; then
+if [ "$arch_bits" -ne 32 ] && [ "$arch_bits" -ne 64 ] ; then
     echo 1>&2 "Error: arch_bits can only be 32 or 64"
     exit 1
 fi
@@ -54,8 +79,8 @@ if ! command -v "$compiler" >/dev/null 2>&1 ; then
     exit 1
 fi
 
-if ! [ -e "$tests_directory" ] ; then
-    echo "Error: Directory $tests_directory does not exist"
+if ! [ -e "$test_directory" ] ; then
+    echo "Error: Directory $test_directory does not exist"
     exit 1
 fi
 
@@ -65,8 +90,9 @@ if ! [ -d "$test_directory" ] ; then
 fi
 
 arch="rv$arch_bits$extensions"
-assembly_directory="assemblies" # hardcoded so far
-mkdir -p $assembly_directory
+mkdir -p "$assembly_directory"
+
+# TODO : add checks for assembly directory
 
 platform=$(uname)
 
@@ -78,9 +104,9 @@ optimization_flags=(
 )
 
 output_file="results.txt"
-echo "" > $output_file
+echo -n > $output_file
 
-for cur_instr_dir in "$tests_directory"/* ; do
+for cur_instr_dir in "$test_directory"/* ; do
     
     instr_name=$(basename -- "$cur_instr_dir")
 
@@ -93,46 +119,64 @@ for cur_instr_dir in "$tests_directory"/* ; do
 
     for test_file in "$cur_instr_dir"/*.c; do
         
+        file_for_64=true
+        cur_filename=$(basename -- "$test_file" .c)
+        if [ "${cur_filename##*-}" = "32" ] && [ "${cur_filename##*-}" != "$cur_filename" ] ; then
+            file_for_64=false
+        fi
+        
+        if [ "$file_for_64" = true ] && [ "$arch_bits" = 32 ] ; then 
+            continue
+        fi
+        if [ "$file_for_64" = false ] && [ "$arch_bits" = 64 ] ; then 
+            continue
+        fi
+
         asm_dir=$assembly_directory/${test_file#*/} # change first directory 
-        mkdir -p $assembly_directory/"$instr_name"
+        mkdir -p "$assembly_directory"/"$instr_name"
     
         for flag in "${optimization_flags[@]}"; do
+
+            cur_asm=${asm_dir%.*}$flag.s # change extension and optimization level to filename
+
             if [ "$platform" == "Linux" ]; then
-                $compiler -march="rv64gc_zba_zbb_zbc_zbs" -S -o "$asm_dir" "$flag" "$test_file-$flag"
-	    elif [ "$platform" == "Darwin" ]; then
-                $compiler -march="rv64gc_zba_zbb_zbc_zbs" -S -o "$asm_dir" "$flag" "$test_file-$flag"
-	    elif [[ "$platform" == *CYGWIN* || "$platform" == *MINGW* ]]; then
-                $compiler -march="rv64gc_zba_zbb_zbc_zbs" -S -o "$asm_dir" "$flag" "$test_file-$flag"
+                $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file"
+	        elif [ "$platform" == "Darwin" ]; then
+                $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file"
+	        elif [[ "$platform" == *CYGWIN* || "$platform" == *MINGW* ]]; then
+                $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file"
             else
-                echo "Error: Unsupported platform"
+                echo 1>&2 "Error: Unsupported platform"
                 exit 1
             fi
-
-            cur_asm=${asm_dir%.*}-${opt_lvls[i]}.s # change extension and optimization level to filename
+            
             if [ $? -eq 0 ]; then
-                echo "Test ${test_file%.*} compiled successfully with optimization flag $flag" >> $output_file
+                echo "Test $test_file compiled successfully with optimization flag $flag" >> $output_file
+                
                 if [ "$platform" == "Linux" ]; then
-                    objdump -d "$asm_dir" | grep -oP "(?<=<)[^>]+" | grep "$instr_name" | while read -r line; do
-        		if [ "$line" == "$instr_name" ] && ! nm -D "$asm_dir" | grep -q "\<$instr_name\>"; then
+                    grep -oP "(?<=<)[^>]+" "$cur_asm" | grep "$instr_name" | while read -r line; do
+        		        if [ "$line" == "$instr_name" ] && ! nm -D "$cur_asm" | grep -q "\<$instr_name\>"; then
+            			    echo "$line" >> $output_file
+        		        fi
+    		        done
+	    	    elif [ "$platform" == "Darwin" ]; then
+    			    grep -oP "(?<=<)[^>]+" | grep "$instr_name" | while read -r line; do
+        		        if [ "$line" == "$instr_name" ] && ! nm -gU "$cur_asm" | grep -q "\<$instr_name\>"; then
             			echo "$line" >> $output_file
-        		fi
-    		done
-	    	elif [ "$platform" == "Darwin" ]; then
-    			otool -tv "$asm_dir" | grep -oP "(?<=<)[^>]+" | grep "$instr_name" | while read -r line; do
-        		if [ "$line" == "$instr_name" ] && ! nm -gU "$asm_dir" | grep -q "\<$instr_name\>"; then
-            			echo "$line" >> $output_file
-        		fi
-    		done    
-		elif [[ "$platform" == *CYGWIN* || "$platform" == *MINGW* ]]; then
-    			objdump -d "$asm_dir" | grep -oP "(?<=<)[^>]+" | grep "$instr_name" | while read -r line; do
-        		if [ "$line" == "$instr_name" ]; then
-            			echo "$line" >> $output_file
-        		fi
-    	    	done
-		fi
+        		        fi
+    		        done    
+		        elif [[ "$platform" == *CYGWIN* || "$platform" == *MINGW* ]]; then
+    			    objdump -d "$asm_dir" | grep -oP "(?<=<)[^>]+" | grep "$instr_name" | while read -r line; do
+        		        if [ "$line" == "$instr_name" ]; then
+            			    echo "$line" >> $output_file
+        		        fi
+    	    	    done
+		        fi
             fi
         done
     done
 done
 
-rm -rf $assembly_directory
+if [ "$delete_assembly_dir" = true ] ; then
+    rm -rf "$assembly_directory"
+fi
