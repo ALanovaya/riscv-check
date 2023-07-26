@@ -21,6 +21,7 @@ assembly_directory="compiled" # by default
 delete_assembly_dir=true # by default
 extensions="gc_zba_zbb_zbc_zbs"
 output_file="results.txt" # by default
+log_file="log.txt" # by default
 
 while [ $# -gt 0 ] ; do
     case $1 in
@@ -107,6 +108,7 @@ optimization_flags=(
 )
 
 echo -n > "$output_file"
+echo -n > "$log_file"
 
 for cur_instr_dir in "$test_directory"/* ; do
     
@@ -144,7 +146,7 @@ for cur_instr_dir in "$test_directory"/* ; do
 
             cur_asm=${asm_dir%.*}$flag.s # change extension and optimization level to filename
 	                
-            if $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file" >>"$output_file" 2>&1 ; then
+            if $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file" >> "$log_file" 2>&1 ; then
                               
                 string=$(grep "$instr_name" "$cur_asm")
                 find_instr=false
@@ -171,11 +173,12 @@ for cur_instr_dir in "$test_directory"/* ; do
                 fi
 
             else 
+                echo "Compilation error when trying: $compiler -march=$arch -S -o $cur_asm $test_file. Must see the log file for more" >> "$output_file"
                 {
-                    echo "Compilation error when trying: $compiler -march=$arch -S -o $cur_asm $flag $test_file"
                     echo "The error message is above"
                     echo
-                } >> "$output_file"
+                } >> "$log_file"
+                break
             fi
         done
 
@@ -194,4 +197,8 @@ done
 
 if [ "$delete_assembly_dir" = true ] ; then
     rm -rf "$assembly_directory"
+fi
+
+if ! [ -s "$log_file" ] ; then 
+    rm "$log_file"
 fi
