@@ -13,12 +13,14 @@ help () {
     echo "[-b|--arch-bits <arch_bits>] Set to 64 by default, can be 64 or 32"
     echo "[-o|--output <directory>] The directory where all compiled files will be located. Set to \"compiled\" by default"
     echo "[-s|--save] Enables saving a directory with compiled files. It is not saved by default"
+    echo -e "[-l|--log <filename>] The file in which the results of the script will be writed (the contents of the file will be overwritten).\nSet to \"results.txt\" by default"
 }
 
 arch_bits=64 # by default
 assembly_directory="compiled" # by default
 delete_assembly_dir=true # by default
 extensions="gc_zba_zbb_zbc_zbs"
+output_file="results.txt" # by default
 
 while [ $# -gt 0 ] ; do
     case $1 in
@@ -44,6 +46,11 @@ while [ $# -gt 0 ] ; do
             ;;
         -s|--save)
             delete_assembly_dir=false
+            shift
+            ;;
+        -l|--log)
+            output_file=$2
+            shift
             shift
             ;;
         -h|--help)
@@ -80,7 +87,7 @@ if ! command -v "$compiler" >/dev/null 2>&1 ; then
 fi
 
 if ! [ -e "$test_directory" ] ; then
-    echo "Error: Directory $test_directory does not exist"
+    echo 1>&2 "Error: Directory $test_directory does not exist"
     exit 1
 fi
 
@@ -92,10 +99,6 @@ fi
 arch="rv$arch_bits$extensions"
 mkdir -p "$assembly_directory"
 
-# TODO : add checks for assembly directory
-
-platform=$(uname)
-
 optimization_flags=(
     "-O0"
     "-O1"
@@ -103,8 +106,7 @@ optimization_flags=(
     "-O3"
 )
 
-output_file="results.txt"
-echo -n > $output_file
+echo -n > "$output_file"
 
 for cur_instr_dir in "$test_directory"/* ; do
     
@@ -115,7 +117,7 @@ for cur_instr_dir in "$test_directory"/* ; do
         continue
     fi
 
-    echo "Instruction $instr_name:" >> $output_file
+    echo "Instruction $instr_name:" >> "$output_file"
 
     for test_file in "$cur_instr_dir"/*.c; do
         
@@ -135,18 +137,59 @@ for cur_instr_dir in "$test_directory"/* ; do
         asm_dir=$assembly_directory/${test_file#*/} # change first directory 
         mkdir -p "$assembly_directory"/"$instr_name"
     
+        generated=""
+        not_generated=""
+
         for flag in "${optimization_flags[@]}"; do
 
             cur_asm=${asm_dir%.*}$flag.s # change extension and optimization level to filename
-
-            $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file"
 	                
-            if [ $? -eq 0 ]; then
-                echo "Test $test_file compiled successfully with optimization flag $flag" >> $output_file                
-                grep -o "$instr_name" $cur_asm >> $output_file
+            if $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file" >>"$output_file" 2>&1 ; then
+                              
+                string=$(grep "$instr_name" "$cur_asm")
+                find_instr=false
+                
+                for word in $string ; do 
+                    if [ "$word" = "$instr_name" ] ; then
+                        find_instr=true
+                        break
+                    fi
+                done
+                 
+                if [ "$find_instr" = true ] ; then
+                    if [ -z "$generated" ] ; then
+                        generated=${flag}
+                    else
+                        generated="${generated}, ${flag}"
+                    fi
+                else 
+                    if [ -z "$not_generated" ] ; then
+                        not_generated=${flag}
+                    else
+                        not_generated="${not_generated}, ${flag}"
+                    fi
+                fi
+
+            else 
+                {
+                    echo "Compilation error when trying: $compiler -march=$arch -S -o $cur_asm $flag $test_file"
+                    echo "The error message is above"
+                    echo
+                } >> "$output_file"
             fi
         done
+
+        echo -n "Test ${test_file##*/}: " >> "$output_file"
+        if [ -n "$not_generated" ] ; then 
+            echo -n "\"$instr_name\" was NOT generated with $not_generated. " >> "$output_file"
+        fi
+        if [ -n "$generated" ] ; then
+            echo -n "\"$instr_name\" was generated with $generated." >> "$output_file"
+        fi
+        echo >> "$output_file"
+
     done
+    echo >> "$output_file"
 done
 
 if [ "$delete_assembly_dir" = true ] ; then
