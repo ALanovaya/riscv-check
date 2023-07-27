@@ -21,7 +21,8 @@ assembly_directory="compiled" # by default
 delete_assembly_dir=true # by default
 extensions="gc_zba_zbb_zbc_zbs"
 output_file="results.txt" # by default
-log_file="log.txt" # by default
+error_log="compilation-errors-log.txt" # by default
+temp="temp.txt" # for saving compiler errors
 
 while [ $# -gt 0 ] ; do
     case $1 in
@@ -108,7 +109,10 @@ optimization_flags=(
 )
 
 echo -n > "$output_file"
-echo -n > "$log_file"
+echo -n > "$error_log"
+echo -n > "$temp"
+
+instr_number=1
 
 for cur_instr_dir in "$test_directory"/* ; do
     
@@ -119,7 +123,7 @@ for cur_instr_dir in "$test_directory"/* ; do
         continue
     fi
 
-    echo "Instruction $instr_name:" >> "$output_file"
+    echo "$instr_number. Instruction $instr_name" >> "$output_file"
 
     for test_file in "$cur_instr_dir"/*.c; do
         
@@ -142,11 +146,13 @@ for cur_instr_dir in "$test_directory"/* ; do
         generated=""
         not_generated=""
 
+        echo -n "Test ${test_file##*/}: " >> "$output_file"
+
         for flag in "${optimization_flags[@]}"; do
 
             cur_asm=${asm_dir%.*}$flag.s # change extension and optimization level to filename
-	                
-            if $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file" >> "$log_file" 2>&1 ; then
+
+            if $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file" > "$temp" 2>&1 ; then
                               
                 string=$(grep "$instr_name" "$cur_asm")
                 find_instr=false
@@ -172,33 +178,48 @@ for cur_instr_dir in "$test_directory"/* ; do
                     fi
                 fi
 
-            else 
-                echo "Compilation error when trying: $compiler -march=$arch -S -o $cur_asm $test_file. Must see the log file for more" >> "$output_file"
+            else
+
+                error_string="Compilation error when trying\n$compiler -march=$arch -S -o $cur_asm $flag $test_file"
                 {
-                    echo "The error message is above"
+                    echo -e "$error_string"
+                    echo "You can see the \"$error_log\" file for more."
+                
+                } >> "$output_file"
+                {
+                    echo -e "$instr_number. Instruction $instr_name; test ${test_file##*/}; $error_string"
+                    echo "Error message:"
+                    cat $temp
                     echo
-                } >> "$log_file"
+                } >> "$error_log"
                 break
+
             fi
         done
 
-        echo -n "Test ${test_file##*/}: " >> "$output_file"
         if [ -n "$not_generated" ] ; then 
             echo -n "\"$instr_name\" was NOT generated with $not_generated. " >> "$output_file"
         fi
         if [ -n "$generated" ] ; then
             echo -n "\"$instr_name\" was generated with $generated." >> "$output_file"
         fi
-        echo >> "$output_file"
+        if [ -n "$not_generated" ] || [ -n "$generated" ] ; then
+            echo >> "$output_file"
+        fi
 
     done
+    
     echo >> "$output_file"
+    instr_number=$((instr_number + 1))
+
 done
 
 if [ "$delete_assembly_dir" = true ] ; then
     rm -rf "$assembly_directory"
 fi
 
-if ! [ -s "$log_file" ] ; then 
-    rm "$log_file"
+if ! [ -s "$error_log" ] ; then 
+    rm -f "$error_log"
 fi
+
+rm -f "$temp"
