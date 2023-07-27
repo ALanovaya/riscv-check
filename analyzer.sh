@@ -131,6 +131,7 @@ for cur_instr_dir in "$test_directory"/* ; do
     fi
 
     echo "$instr_number. Instruction $instr_name" >> "$output_file"
+    instr_only_for_64=true
 
     for test_file in "$cur_instr_dir"/*.c; do
         
@@ -146,6 +147,8 @@ for cur_instr_dir in "$test_directory"/* ; do
         if [ "$file_for_64" = false ] && [ "$arch_bits" = 64 ] ; then 
             continue
         fi
+        
+        instr_only_for_64=false
 
         asm_dir=$assembly_directory/${test_file#*/} # change first directory 
         mkdir -p "$assembly_directory"/"$instr_name"
@@ -160,12 +163,12 @@ for cur_instr_dir in "$test_directory"/* ; do
             cur_asm=${asm_dir%.*}$flag.s # change extension and optimization level to filename
 
             if [ -z "$clang_flag" ] ; then
-                compile_command="$compiler -march=$arch -S -o $cur_asm $flag $test_file > $temp 2>&1"
+                compile_command="$compiler -march=$arch -S -o $cur_asm $flag $test_file"
             else 
-                compile_command="$compiler -march=$arch -S -o $cur_asm $flag $clang_flag $test_file > $temp 2>&1"
+                compile_command="$compiler -march=$arch -S -o $cur_asm $flag $clang_flag $test_file"
             fi
 
-            if eval "$compile_command" ; then
+            if eval "$compile_command" > $temp 2>&1 ; then
                               
                 string=$(grep "$instr_name" "$cur_asm")
                 find_instr=false
@@ -201,7 +204,7 @@ for cur_instr_dir in "$test_directory"/* ; do
                 } >> "$output_file"
                 {
                     echo -e "$instr_number. Instruction $instr_name; test ${test_file##*/}; $error_string"
-                    echo "Error message:"
+                    echo "Error messages:"
                     cat $temp
                     echo
                 } >> "$error_log"
@@ -222,6 +225,9 @@ for cur_instr_dir in "$test_directory"/* ; do
 
     done
     
+    if [ "$instr_only_for_64" = true ] ; then 
+        echo "This instruction is for 64-bit architectures only." >> "$output_file"
+    fi
     echo >> "$output_file"
     instr_number=$((instr_number + 1))
 
