@@ -224,4 +224,4 @@ fi
 
 rm -f "$temp"
 
-echo "Done. The results are written to a file $output_file."
+echo "Done. The results are written to \"$output_file\"."
