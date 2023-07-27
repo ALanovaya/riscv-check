@@ -13,7 +13,7 @@ help () {
     echo "[-b|--arch-bits <arch_bits>] Set to 64 by default, can be 64 or 32"
     echo "[-o|--output <directory>] The directory where all compiled files will be located. Set to \"compiled\" by default"
     echo "[-s|--save] Enables saving a directory with compiled files. It is not saved by default"
-    echo -e "[-l|--log <filename>] The file in which the results of the script will be writed (the contents of the file will be overwritten).\nSet to \"results.txt\" by default"
+    echo -e "[-l|--log <filename>] The file in which the results of the script will be writed (the contents of the file will be overwritten). Set to \"results.txt\" by default"
 }
 
 arch_bits=64 # by default
@@ -223,3 +223,5 @@ if ! [ -s "$error_log" ] ; then
 fi
 
 rm -f "$temp"
+
+echo "Done. The results are written to a file $output_file."
