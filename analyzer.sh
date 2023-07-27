@@ -17,6 +17,7 @@ help () {
 }
 
 arch_bits=64 # by default
+clang_flag="" # empty if compiler is gcc
 assembly_directory="compiled" # by default
 delete_assembly_dir=true # by default
 extensions="gc_zba_zbb_zbc_zbs"
@@ -98,6 +99,12 @@ if ! [ -d "$test_directory" ] ; then
     exit 1
 fi
 
+case "$compiler" in
+    *"clang"*)
+        clang_flag="--target=riscv$arch_bits"
+        ;;
+esac
+
 arch="rv$arch_bits$extensions"
 mkdir -p "$assembly_directory"
 
@@ -152,7 +159,13 @@ for cur_instr_dir in "$test_directory"/* ; do
 
             cur_asm=${asm_dir%.*}$flag.s # change extension and optimization level to filename
 
-            if $compiler -march="$arch" -S -o "$cur_asm" "$flag" "$test_file" > "$temp" 2>&1 ; then
+            if [ -z "$clang_flag" ] ; then
+                compile_command="$compiler -march=$arch -S -o $cur_asm $flag $test_file > $temp 2>&1"
+            else 
+                compile_command="$compiler -march=$arch -S -o $cur_asm $flag $clang_flag $test_file > $temp 2>&1"
+            fi
+
+            if eval "$compile_command" ; then
                               
                 string=$(grep "$instr_name" "$cur_asm")
                 find_instr=false
@@ -180,7 +193,7 @@ for cur_instr_dir in "$test_directory"/* ; do
 
             else
 
-                error_string="Compilation error when trying\n$compiler -march=$arch -S -o $cur_asm $flag $test_file"
+                error_string="Compilation error when trying\n$compiler -march=$arch -S -o $cur_asm $flag$clang_flag $test_file"
                 {
                     echo -e "$error_string"
                     echo "You can see the \"$error_log\" file for more."
