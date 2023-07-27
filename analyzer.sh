@@ -193,7 +193,7 @@ for cur_instr_dir in "$test_directory"/* ; do
 
             else
 
-                error_string="Compilation error when trying\n$compiler -march=$arch -S -o $cur_asm $flag$clang_flag $test_file"
+                error_string="Compilation error when trying\n$compile_command"
                 {
                     echo -e "$error_string"
                     echo "You can see the \"$error_log\" file for more."
