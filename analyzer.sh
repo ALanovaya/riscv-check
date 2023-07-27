@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 usage () { 
-    echo "Usage: $0 [-c|--compiler <compiler>] [-t|--test-directory <test_directory>]"
+    echo "Usage: $0 {-c|--compiler <compiler>} {-t|--test-directory <test_directory>}"
 }
 
 help () {
