@@ -5,7 +5,7 @@ usage () {
 }
 
 help () {
-    echo "Description: TODO"
+    echo "Description: utility for evaluating code generation coverage by running tests from the required directory for different compilers"
     echo
     usage
     echo
