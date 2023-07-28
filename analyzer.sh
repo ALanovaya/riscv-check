@@ -173,12 +173,14 @@ for cur_instr_dir in "$test_directory"/* ; do
                               
                 string=$(grep "$instr_name" "$cur_asm")
                 find_instr=false
-                
+                prev_word=""
+
                 for word in $string ; do 
-                    if [ "$word" = "$instr_name" ] ; then
+                    if [ "$word" = "$instr_name" ] && [ "$prev_word" != ".globl" ] ; then
                         find_instr=true
                         break
                     fi
+                    prev_word="$word"
                 done
                  
                 if [ "$find_instr" = true ] ; then
