@@ -149,6 +149,7 @@ for cur_instr_dir in "$test_directory"/* ; do
         fi
         
         instr_only_for_64=false
+        was_warning=false
 
         asm_dir=$assembly_directory/${test_file#*/} # change first directory 
         mkdir -p "$assembly_directory"/"$instr_name"
@@ -194,8 +195,19 @@ for cur_instr_dir in "$test_directory"/* ; do
                     fi
                 fi
 
-            else
+                if [ -s "$temp" ] && [ "$was_warning" = false ]; then
+                    was_warning=true
+                    echo "Compilation ended with warnings. You can see the \"$error_log\" file for more." >> "$output_file"
+                    {
+                        echo -e "$instr_number. Instruction $instr_name; test ${test_file##*/}; Compilation ended with warnings, command:"
+                        echo "$compile_command"
+                        echo "Compiler messages:"
+                        cat $temp
+                        echo
+                    } >> "$error_log"
+                fi
 
+            else
                 error_string="Compilation error when trying\n$compile_command"
                 {
                     echo -e "$error_string"
