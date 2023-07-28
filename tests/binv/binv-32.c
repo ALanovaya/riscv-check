@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <stdio.h>
 
 #define XLEN 32
 

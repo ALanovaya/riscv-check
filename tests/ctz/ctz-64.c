@@ -3,14 +3,10 @@
 #define XLEN 64
 
 int64_t test(int64_t rs) {
-    int64_t rd = 0;
-
-    for (int i = 0; i < XLEN; i++) {
-        if ((rs >> i) & 1)
-            break;
-
-        rd++;
+  for (int i = 0; i < XLEN; i++) {
+    if ((rs >> i) & 1) {
+      return i;
     }
-
-    return rd;
+  }
+  return XLEN;
 }
